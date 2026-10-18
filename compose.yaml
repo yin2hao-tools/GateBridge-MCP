@@ -1,0 +1,16 @@
+services:
+  gatebridge:
+    image: ${GATEBRIDGE_IMAGE:?Set GATEBRIDGE_IMAGE to a published version tag}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GATEBRIDGE_PORT: "8000"
+    ports:
+      - "${GATEBRIDGE_BIND_ADDRESS:-127.0.0.1}:${GATEBRIDGE_HTTP_PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

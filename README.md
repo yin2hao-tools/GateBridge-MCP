@@ -114,6 +114,14 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`。请求需要携带 `Authorization: B
 
 没有连接生产地址或真实 ESP32。机械到位、防夹、生产网络和实际固件兼容性需要现场确认。
 
+## 容器与自动发布
+
+提供 [Dockerfile](Dockerfile)、[Compose 示例](compose.yaml) 和 [GitHub Actions 工作流](.github/workflows/publish-image.yml)。推送 `X.Y.Z` 或 `vX.Y.Z` 格式的 tag 后，自动构建两个 Linux 平台的镜像，并上传到 Secrets 指定的 Docker Hub、GHCR 或兼容仓库。工作流只构建和上传，部署由外部工具完成。
+
+需要配置 `REGISTRY_HOST`、`REGISTRY_IMAGE`、`REGISTRY_USERNAME` 和 `REGISTRY_PASSWORD` 四个 Repository Secrets。详细步骤、工作流链接和镜像运行方法见 [构建发布说明](docs/publishing.md)。
+
+工作流通过 JSON Schema 检查，Compose 通过配置检查。开发机器的 Docker 引擎未运行，因此尚未执行本地镜像构建和真实仓库上传。
+
 ## 参考资料
 
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x)：Tools、Resources、Prompts、结构化结果和生命周期。

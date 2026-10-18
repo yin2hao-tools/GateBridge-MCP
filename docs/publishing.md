@@ -4,7 +4,9 @@
 
 [GitHub Actions 工作流](../.github/workflows/publish-image.yml) 在推送版本 tag 时构建镜像，并上传到 GitHub Secrets 指定的容器镜像仓库。它不通过 SSH 连接服务器，也不更新运行中的服务。部署由你现有的工具完成。
 
-镜像包含 `linux/amd64` 和 `linux/arm64` 两个平台。工作流使用 [Docker 官方构建发布 Action](https://github.com/docker/build-push-action)、[仓库登录 Action](https://github.com/docker/login-action)、[Buildx Action](https://github.com/docker/setup-buildx-action) 和 [QEMU Action](https://github.com/docker/setup-qemu-action)。
+发布方式参考 [Myvideos-TS-Backend 的工作流](https://github.com/yin2hao-Myvideos/Myvideos-TS-Backend/blob/master/.github/workflows/docker-publish.yml)。本项目保留一个发布任务，依次读取版本号、配置构建环境、登录仓库、构建并推送。
+
+镜像名固定为 `gatebridge-mcp`，发布版本标签和 `latest`。镜像包含 `linux/amd64` 和 `linux/arm64` 两个平台。工作流使用 Docker 官方构建、登录、Buildx 和 QEMU Actions。
 
 镜像仓库必须支持 Docker Registry API、HTTPS 和 OCI 多平台镜像。Docker Hub、GHCR 和支持这些能力的私有仓库均可使用。自签名证书或仅内网可达的仓库，需要另外配置自托管 Runner 的网络和证书。
 
@@ -15,19 +17,21 @@
 | Secret | 用途 | Docker Hub 示例 | GHCR 示例 |
 | --- | --- | --- | --- |
 | `REGISTRY_HOST` | 仓库域名，可带端口，不带协议或路径 | `docker.io` | `ghcr.io` |
-| `REGISTRY_IMAGE` | 小写的命名空间和镜像名，不带域名或 tag | `yourname/gatebridge-mcp` | `yourname/gatebridge-mcp` |
+| `REGISTRY_NAMESPACE` | 目标镜像仓库的小写用户名或组织名，不带域名、镜像名或 tag | `yourname` | `yourname` |
 | `REGISTRY_USERNAME` | 登录账户 | Docker Hub 用户名 | GitHub 用户名 |
 | `REGISTRY_PASSWORD` | 具备推送权限的访问令牌 | Docker Hub access token | 有 `write:packages` 权限的 PAT |
 
-私有仓库示例：`REGISTRY_HOST=registry.example.com:5000`，`REGISTRY_IMAGE=robot/gatebridge-mcp`。
+私有仓库示例：`REGISTRY_HOST=registry.example.com:5000`，`REGISTRY_NAMESPACE=robot`，最终镜像路径为 `registry.example.com:5000/robot/gatebridge-mcp`。
+
+从旧工作流迁移时，将 `REGISTRY_IMAGE=yourname/gatebridge-mcp` 改为 `REGISTRY_NAMESPACE=yourname`。新工作流不再读取 `REGISTRY_IMAGE`，可以删除旧 Secret。
 
 这些值只指定镜像发布目标。**不要把生产设备令牌或 MCP 访问令牌放入镜像构建参数。** 运行时令牌由你的部署工具注入；发布镜像不需要访问 ESP32 或原服务端。
 
-上传前，创建镜像仓库或确认账号可以自动创建仓库。组织策略、SSO 授权、令牌有效期和镜像可见性由仓库平台控制。
+上传前，创建镜像仓库或确认账号可以自动创建仓库。`REGISTRY_USERNAME` 对该命名空间必须有推送权限，访问令牌也需要写入权限。GitHub 组织名不一定是 Docker Hub 的命名空间。登录成功不能证明有推送权限。
 
 ## 触发版本发布
 
-触发器采用 `*.*.*` tag 匹配，并在工作流内严格校验正式版本号。支持 `0.1.0` 和 `v0.1.0`；不接受 `release-0.1.0`、`v0.1.0-rc.1`、前导零或带额外字段的版本。
+触发器采用 `*.*.*` tag 匹配。建议使用 `0.1.0` 或 `v0.1.0` 这类版本号。工作流去掉开头的 `v`，直接用作镜像标签，不再添加自定义格式校验。
 
 发布前，将 `pyproject.toml` 中的项目版本更新为目标版本，并运行 `uv lock`，将改动提交到默认分支。然后创建并推送签名 tag：
 
@@ -36,24 +40,20 @@ git tag -s v0.1.0 -m "GateBridge MCP 0.1.0"
 git push origin v0.1.0
 ```
 
-推送分支不会触发此工作流。推送正式 tag 后，会生成以下镜像引用：
+推送分支不会触发此工作流。推送 `v0.1.0` 后，会生成以下镜像引用：
 
 ```text
-<REGISTRY_HOST>/<REGISTRY_IMAGE>:0.1.0
-<REGISTRY_HOST>/<REGISTRY_IMAGE>:sha-<完整提交 SHA>
+<REGISTRY_HOST>/<REGISTRY_NAMESPACE>/gatebridge-mcp:0.1.0
+<REGISTRY_HOST>/<REGISTRY_NAMESPACE>/gatebridge-mcp:latest
 ```
 
-工作流不发布 `latest`，避免重跑旧版本时改变默认部署目标。部署工具应选定版本 tag 或镜像 digest；成功的 Actions 页面会显示 digest。
+`latest` 指向最近一次成功发布的镜像。重新运行旧版本也会更新 `latest`。需要固定版本的部署应使用版本标签或镜像 digest；Docker 官方 Action 的构建摘要会显示 digest。
 
 同名 tag 仍可能在重新运行时覆盖镜像。若需要禁止覆盖，在镜像仓库启用 tag 不可变策略。推荐部署使用 digest。
 
-工作流运行入口为你仓库下的 **Actions → Publish container image**。上传代码后，实际页面地址为：
+工作流运行入口为仓库下的 **Actions → Publish container image**，当前项目的 [Actions 页面](https://github.com/yin2hao-tools/GateBridge-MCP/actions/workflows/publish-image.yml) 可查看运行记录。
 
-```text
-https://github.com/<OWNER>/<REPO>/actions/workflows/publish-image.yml
-```
-
-当前项目尚未绑定远程仓库，因此这里使用占位地址；仓库内的工作流文件链接已经可用。
+工作流改动随新 tag 生效。发布新版本前，需要先将改动推送到 GitHub。直接重跑旧 tag 的运行记录会继续使用旧工作流。
 
 ## 运行已发布镜像
 

@@ -16,38 +16,15 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      REGISTRY_HOST: ${{ secrets.REGISTRY_HOST }}
-      REGISTRY_IMAGE: ${{ secrets.REGISTRY_IMAGE }}
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
     steps:
       - name: Check out release
         uses: actions/checkout@v6
 
-      - name: Validate version and registry configuration
-        id: release
+      - name: Read version from tag
+        id: version
         shell: bash
         run: |
-          set -euo pipefail
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo '::error::Tag must be X.Y.Z or vX.Y.Z without a prerelease suffix.'
-            exit 1
-          fi
-          if [[ ! "$REGISTRY_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$ ]]; then
-            echo '::error::Set REGISTRY_HOST to a registry hostname, without a URL scheme or path.'
-            exit 1
-          fi
-          if [[ ! "$REGISTRY_IMAGE" =~ ^[a-z0-9]+([._-]+[a-z0-9]+)*(/[a-z0-9]+([._-]+[a-z0-9]+)*)*$ ]]; then
-            echo '::error::Set REGISTRY_IMAGE to a lowercase namespace/image path, without a tag.'
-            exit 1
-          fi
-          if [[ -z "$REGISTRY_USERNAME" || -z "$REGISTRY_PASSWORD" ]]; then
-            echo '::error::REGISTRY_USERNAME and REGISTRY_PASSWORD are required.'
-            exit 1
-          fi
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          python3 -m compileall -q src
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -64,37 +41,18 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build and push versioned images
-        id: build
+      - name: Build and push image
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ secrets.REGISTRY_HOST }}/${{ secrets.REGISTRY_IMAGE }}:${{ steps.release.outputs.version }}
-            ${{ secrets.REGISTRY_HOST }}/${{ secrets.REGISTRY_IMAGE }}:sha-${{ github.sha }}
+            ${{ secrets.REGISTRY_HOST }}/${{ secrets.REGISTRY_NAMESPACE }}/gatebridge-mcp:${{ steps.version.outputs.version }}
+            ${{ secrets.REGISTRY_HOST }}/${{ secrets.REGISTRY_NAMESPACE }}/gatebridge-mcp:latest
           labels: |
             org.opencontainers.image.title=GateBridge MCP
-            org.opencontainers.image.description=MCP adapter for an existing ESP32 gate controller
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.release.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: mode=min
-          sbom: true
-
-      - name: Record published digest
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
-        shell: bash
-        run: |
-          {
-            echo '### GateBridge MCP image published'
-            echo "Version: $RELEASE_VERSION"
-            echo "Digest: $IMAGE_DIGEST"
-            echo 'Platforms: linux/amd64, linux/arm64'
-            echo 'Deployment is handled by your existing deployment service.'
-          } >> "$GITHUB_STEP_SUMMARY"

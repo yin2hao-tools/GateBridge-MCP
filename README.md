@@ -118,9 +118,11 @@ MCP 地址为 `http://127.0.0.1:8000/mcp`。请求需要携带 `Authorization: B
 
 提供 [Dockerfile](Dockerfile)、[Compose 示例](compose.yaml) 和 [GitHub Actions 工作流](.github/workflows/publish-image.yml)。推送 `X.Y.Z` 或 `vX.Y.Z` 格式的 tag 后，自动构建两个 Linux 平台的镜像，并上传到 Secrets 指定的 Docker Hub、GHCR 或兼容仓库。工作流只构建和上传，部署由外部工具完成。
 
-需要配置 `REGISTRY_HOST`、`REGISTRY_IMAGE`、`REGISTRY_USERNAME` 和 `REGISTRY_PASSWORD` 四个 Repository Secrets。详细步骤、工作流链接和镜像运行方法见 [构建发布说明](docs/publishing.md)。
+发布方式参照 Myvideos-TS-Backend，镜像名固定为 `gatebridge-mcp`，同时发布版本标签和 `latest`。配置 `REGISTRY_HOST`、`REGISTRY_NAMESPACE`、`REGISTRY_USERNAME` 和 `REGISTRY_PASSWORD` 四个 Repository Secrets。
 
-工作流通过 JSON Schema 检查，Compose 通过配置检查。开发机器的 Docker 引擎未运行，因此尚未执行本地镜像构建和真实仓库上传。
+原来的 `REGISTRY_IMAGE` 改为 `REGISTRY_NAMESPACE`，只填写目标平台的用户名或组织名。详细步骤、工作流链接和镜像运行方法见 [构建发布说明](docs/publishing.md)。
+
+工作流通过 JSON Schema 检查，Compose 通过配置检查。此前 CI 已完成两个平台的镜像构建，但推送因仓库写入权限不足失败；本次尚未验证实际上传。
 
 ## 参考资料
 

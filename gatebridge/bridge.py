@@ -13,6 +13,9 @@ from .config import Settings
 from .models import CommandQueued, GateStatus
 
 logger = logging.getLogger(__name__)
+transport_logger = logging.getLogger(f"{__name__}.transport")
+# WebSocket DEBUG 会记录认证帧，使用独立的 INFO 日志避免暴露令牌。
+transport_logger.setLevel(logging.INFO)
 
 
 class BridgeError(Exception):
@@ -43,6 +46,7 @@ class GateBridge:
             self._task.cancel()
             with suppress(asyncio.CancelledError):
                 await self._task
+            self._task = None
 
     @staticmethod
     def _decode(raw: str | bytes) -> dict:
@@ -65,6 +69,7 @@ class GateBridge:
                     ping_interval=20,
                     ping_timeout=20,
                     max_size=65536,
+                    logger=transport_logger,
                 ) as socket:
                     await socket.send(
                         json.dumps(

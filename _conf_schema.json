@@ -1,0 +1,63 @@
+{
+  "connection": {
+    "type": "object",
+    "description": "闸门连接",
+    "items": {
+      "upstream_url": {
+        "type": "string",
+        "description": "原闸门服务 WebSocket 地址",
+        "default": "ws://127.0.0.1:8777/ws",
+        "hint": "填写支持 controller 角色的独立舵机入口。AstrBot 在容器中时，127.0.0.1 指向该容器。公网接入请使用 wss 或加密隧道。"
+      },
+      "device_id": {
+        "type": "string",
+        "description": "设备 ID",
+        "default": "mg946r-001",
+        "hint": "与原后端 server.servo_device_id 一致，由原服务维护者提供。"
+      },
+      "device_token": {
+        "type": "string",
+        "description": "原后端认证令牌",
+        "default": "",
+        "secret": true,
+        "hint": "由原服务维护者提供 server.servo_token；未配置时为实际生效的 server.auth_key。留空时插件不连接设备。此值只在插件配置中保存，不会回显到聊天。"
+      },
+      "timeout": {
+        "type": "int",
+        "description": "连接、认证和指令回执超时（秒）",
+        "default": 8,
+        "hint": "填写 1 到 3600。超时只会报告不确定结果，不会自动重发开关指令。"
+      },
+      "status_max_age": {
+        "type": "int",
+        "description": "状态报告有效期（秒）",
+        "default": 30,
+        "hint": "填写 1 到 3600。初始快照可能来自原后端过期缓存，始终按未知处理。"
+      }
+    }
+  },
+  "permissions": {
+    "type": "object",
+    "description": "指令权限",
+    "items": {
+      "allow_astrbot_admins": {
+        "type": "bool",
+        "description": "允许 AstrBot 全局管理员执行指令",
+        "default": true,
+        "hint": "仅识别 AstrBot 的管理员身份，聊天群管理员不会因此自动获得权限。关闭后，仅下方两个名单中的用户可以执行。"
+      },
+      "admin_ids": {
+        "type": "list",
+        "description": "插件管理员授权标识",
+        "default": [],
+        "hint": "每项填写 平台实例ID:用户ID，例如 qq_main:12345678。执行 /闸门 状态 时，未授权用户会收到自己的授权标识。此名单只授予本插件指令权限，不会授予 AstrBot 全局管理权限。"
+      },
+      "member_ids": {
+        "type": "list",
+        "description": "允许执行指令的指定成员",
+        "default": [],
+        "hint": "每项填写完整授权标识，格式与上方一致。名单内成员可以开门、关门、查询状态和帮助；其他用户全部拒绝。请勿只填数字账号、群号、昵称或通配符。"
+      }
+    }
+  }
+}

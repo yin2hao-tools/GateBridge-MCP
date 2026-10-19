@@ -1,0 +1,7 @@
+name: astrbot_plugin_gatebridge
+display_name: GateBridge 闸门控制
+desc: 直接连接现有 ESP32 闸门后端，在插件菜单配置连接与管理员、指定成员权限，通过指令开门、关门和查询状态。
+version: v0.1.0
+author: yin2hao
+repo: https://github.com/yin2hao-tools/GateBridge-MCP
+astrbot_version: ">=4.25.5,<5"

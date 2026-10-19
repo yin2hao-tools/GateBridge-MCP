@@ -1,26 +1,13 @@
-[build-system]
-requires = ["hatchling>=1.27,<2"]
-build-backend = "hatchling.build"
-
 [project]
-name = "gatebridge-mcp"
+name = "astrbot-plugin-gatebridge"
 version = "0.1.0"
-description = "Connect MCP clients to an existing ESP32 gate controller without changing its server or firmware."
+description = "AstrBot gate commands with menu configuration and administrator/member access control."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-  "mcp>=1.22,<2",
-  "pydantic>=2.11,<3",
-  "starlette>=0.46,<1",
-  "uvicorn>=0.35,<1",
-  "websockets>=14.2,<16",
-]
+dependencies = ["websockets>=15.0.1,<16"]
 
-[project.scripts]
-gatebridge-mcp = "gatebridge_mcp.server:main"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/gatebridge_mcp"]
+[tool.uv]
+package = false
 
 [tool.ruff]
 target-version = "py312"

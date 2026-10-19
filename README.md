@@ -1,131 +1,97 @@
-# GateBridge MCP
+# GateBridge 闸门控制
 
-## 用途
+## 功能
 
-GateBridge MCP 将现有 ESP32/MG946R 闸门控制服务接入 MCP（Model Context Protocol，模型上下文协议）。它以 `controller` 身份连接原服务端，原服务端和 ESP32 固件保持原样。
+这是一个 AstrBot 插件，名称为 `astrbot_plugin_gatebridge`。它直接连接现有 ESP32/MG946R 舵机后端，通过聊天指令开门、关门和读取状态。原服务端和 ESP32 固件保持原样。
+
+连接地址、设备 ID、令牌、管理员和指定成员全部在 **插件 → GateBridge 闸门控制 → 插件配置** 中设置。无需额外部署 MCP 服务，也不需要配置镜像仓库。
 
 ```text
-你的机器人 → MCP → GateBridge MCP → 原舵机 WebSocket 服务 → ESP32 → 闸门
-原网页和原 Agent ─────────────────→ 原舵机 WebSocket 服务
+已授权用户 → AstrBot 指令 → 本插件 → 原舵机 WebSocket 后端 → ESP32 → 闸门
 ```
 
-工具包括 `gate_open`、`gate_close` 和 `gate_get_status`。服务还提供设备说明、状态和协议三个 Resources，以及一个操作提示模板。所有接口都有中文描述和明确的结果语义，详见 [接口说明](docs/api.md)。
+**“指令已转发”仅表示原服务端已转发命令，不能证明闸门已经到位。** 本插件无法替代限位、防夹或现场确认。
 
-**`queued` 只表示原服务端已转发命令，不能证明闸门已经到位。** 本服务不提供原协议缺少的限位、防夹检测和全局控制仲裁。
+## 安装
 
-## 本地运行
+需要 AstrBot `>=4.25.5,<5` 和 Python `>=3.12`。插件运行依赖只有 `websockets`，AstrBot 安装插件时会读取 `requirements.txt`。
 
-需要 Python 3.12 或更新版本，以及现有舵机服务的地址、设备 ID 和令牌。默认设备 ID 为 `mg946r-001`。开门固定为 180°，关门固定为 0°，与原网页保持一致。
+可以在 AstrBot 的插件菜单中通过仓库链接安装：
 
-安装依赖：
+```text
+https://github.com/yin2hao-tools/GateBridge-MCP
+```
+
+仓库名称保留不变，AstrBot 根据 `metadata.yaml` 识别插件名称。仓库安装需要先将本次插件改动推送到 GitHub；推送前可以使用本地打包的 ZIP 安装。
+
+也可以下载 GitHub Release 中的 `astrbot_plugin_gatebridge.zip`，在插件菜单选择本地上传。安装完成后，确认插件已启用，再打开插件卡片上的配置按钮。
+
+如果此前已经在 AstrBot 配置了旧 GateBridge MCP，请先移除或停用旧的 MCP 工具。旧 MCP 工具调用不受本插件的成员名单控制。旧版本源码和镜像发布方式保留在 `v0.0.2` 标签中。
+
+## 插件菜单配置
+
+### 闸门连接
+
+| 配置项 | 填写内容 | 获取方式 |
+| --- | --- | --- |
+| 原闸门服务 WebSocket 地址 | 例如 `ws://server:8777/ws` | 原服务维护者提供的独立舵机入口，需支持 `controller` 角色 |
+| 设备 ID | 默认 `mg946r-001` | 与原后端 `server.servo_device_id` 一致 |
+| 原后端认证令牌 | 原服务现用令牌 | 原后端 `server.servo_token`，未配置时使用实际生效的 `server.auth_key` |
+| 连接、认证和指令回执超时 | 默认 8 秒 | 可以保留默认值，允许 1～3600 秒 |
+| 状态报告有效期 | 默认 30 秒 | 可以保留默认值，允许 1～3600 秒 |
+
+认证令牌输入框使用密码遮罩。AstrBot 会持久化插件配置；遮罩不代表配置文件加密。插件不会把令牌写入聊天回复或日志。
+
+令牌留空时，插件保持可加载状态，且不连接原后端。保存设置后，按 AstrBot 的提示重载插件。重载会关闭旧连接，新实例重新认证；已发送的开关命令不会重放。
+
+如果 AstrBot 在 Docker 中运行，`127.0.0.1` 指向 AstrBot 容器自身。地址应填写容器网络可达的原后端 IP 或域名。公网连接请使用已有的 `wss` 入口或加密隧道。
+
+### 管理员和指定成员
+
+| 配置项 | 默认值 | 效果 |
+| --- | --- | --- |
+| 允许 AstrBot 全局管理员执行指令 | 开启 | AstrBot 已识别的全局管理员可以操作；群管理员不会自动获得权限 |
+| 插件管理员授权标识 | 空列表 | 名单内用户可执行本插件指令，不会获得 AstrBot 全局管理权限 |
+| 允许执行指令的指定成员 | 空列表 | 名单内成员可开门、关门、查询状态和帮助 |
+
+授权标识格式为 **平台实例 ID:用户 ID**。例如平台实例为 `qq_main`、QQ 号为 `12345678`，则填写 `qq_main:12345678`。每项填写一个完整标识，不填写昵称、群号、裸账号或通配符。
+
+获取标识的方法：让目标用户向机器人发送 `/闸门 状态`。未授权用户会收到拒绝提示，以及自己的完整授权标识。管理员将该标识复制到配置中的对应名单，保存并按界面提示重载即可。
+
+平台实例 ID 来自 AstrBot 的机器人连接实例，同类平台的多个实例也分别识别。相同用户 ID 在另一个实例中不会匹配本名单。名单按用户授权，不限定某个群；被授权用户可以在该平台实例的群聊或私聊中执行。
+
+如需完全由插件名单管理，关闭“允许 AstrBot 全局管理员执行指令”，然后填写插件管理员和成员名单。关闭继承且两个名单均为空时，所有用户都会被拒绝。
+
+AstrBot 的“插件 → 管理行为 → 指令”可额外限制指令。若将本指令设为仅管理员，指定成员会先被 AstrBot 拦截。需要成员可用时，保留指令的默认成员权限，由本插件检查名单。
+
+## 指令
+
+以下使用 AstrBot 默认 `/` 前缀。更改了唤醒前缀时，使用你的实际前缀。
+
+| 指令 | 英文写法 | 效果 |
+| --- | --- | --- |
+| `/闸门 开门` | `/gate open` | 发送 180° 开门指令 |
+| `/闸门 关门` | `/gate close` | 发送 0° 关门指令 |
+| `/闸门 状态` | `/gate status` | 读取最近的连接、在线和角度报告，不移动闸门 |
+| `/闸门 帮助` 或 `/闸门` | `/gate help` 或 `/gate` | 查看指令和自己的授权标识 |
+
+所有指令使用同一权限检查。没有注册 LLM 工具，也不会根据普通聊天内容自动开关闸门。指令处理完会阻止后续默认聊天处理。
+
+详细返回含义、错误处理和协议边界见 [指令说明](docs/commands.md)。首次配置后，先查询状态，再在约定的现场联调时段检查真实动作。
+
+## 本地开发
 
 ```sh
 uv sync --locked
+python -m compileall -q main.py gatebridge
 ```
 
-PowerShell 下配置并运行：
-
-```powershell
-$env:GATEBRIDGE_UPSTREAM_URL = 'ws://127.0.0.1:8777/ws'
-$env:GATEBRIDGE_DEVICE_ID = 'mg946r-001'
-$env:GATEBRIDGE_DEVICE_TOKEN = '<现用设备令牌>'
-uv run --locked gatebridge-mcp
-```
-
-Linux 下配置并运行：
-
-```sh
-export GATEBRIDGE_UPSTREAM_URL=ws://127.0.0.1:8777/ws
-export GATEBRIDGE_DEVICE_ID=mg946r-001
-export GATEBRIDGE_DEVICE_TOKEN='<现用设备令牌>'
-uv run --locked gatebridge-mcp
-```
-
-默认使用 stdio，日志写入 stderr。上游暂时离线时，MCP 仍可启动并列出工具、读取资源。服务会自动重新连接；开关命令永不自动重放。
-
-### 机器人通过 stdio 接入
-
-将下面配置放入机器人的 MCP 配置文件，并替换路径与令牌。Windows 使用 `D:/code/temp/mcptest` 形式的绝对路径。
-
-```json
-{
-  "mcpServers": {
-    "gatebridge": {
-      "command": "uv",
-      "args": ["run", "--locked", "--directory", "/absolute/path/to/gatebridge-mcp", "gatebridge-mcp"],
-      "env": {
-        "GATEBRIDGE_UPSTREAM_URL": "ws://original-server:8777/ws",
-        "GATEBRIDGE_DEVICE_ID": "mg946r-001",
-        "GATEBRIDGE_DEVICE_TOKEN": "<现用设备令牌>"
-      }
-    }
-  }
-}
-```
-
-### 机器人通过 HTTP 接入
-
-```sh
-export GATEBRIDGE_API_TOKEN='<独立的机器人访问令牌>'
-uv run --locked gatebridge-mcp --transport streamable-http --host 127.0.0.1 --port 8000
-```
-
-MCP 地址为 `http://127.0.0.1:8000/mcp`。请求需要携带 `Authorization: Bearer <机器人访问令牌>`。服务使用静态 Bearer 认证，不包含 OAuth 登录与令牌签发；机器人需支持自定义认证请求头。
-
-远程访问时，使用 HTTPS 反向代理或受控加密网络。将实际请求的 Host 加入 `GATEBRIDGE_ALLOWED_HOSTS`；浏览器调用还需设置 `GATEBRIDGE_ALLOWED_ORIGINS`。Origin 白名单用于请求检查，不会自动启用跨域 CORS。普通服务端机器人无需 Origin。
-
-`GET /healthz` 无需认证，仅返回进程存活状态。它不证明板子在线，也不证明闸门状态。
-
-## 配置
-
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `GATEBRIDGE_UPSTREAM_URL` | `ws://127.0.0.1:8777/ws` | 原舵机服务地址，支持 `ws` 和 `wss`，禁止内嵌凭据和查询参数 |
-| `GATEBRIDGE_DEVICE_ID` | `mg946r-001` | 与原服务端一致的固定设备 ID |
-| `GATEBRIDGE_DEVICE_TOKEN` | 无，必填 | 原服务端现用令牌，不是机器人访问令牌 |
-| `GATEBRIDGE_TIMEOUT` | `8` | 连接、认证和单次命令回执的超时秒数 |
-| `GATEBRIDGE_STATUS_MAX_AGE` | `30` | 状态报告的有效秒数；初始快照始终按不可信缓存处理 |
-| `GATEBRIDGE_TRANSPORT` | `stdio` | `stdio` 或 `streamable-http` |
-| `GATEBRIDGE_HOST` | `127.0.0.1` | HTTP 监听地址，命令行参数可覆盖 |
-| `GATEBRIDGE_PORT` | `8000` | HTTP 端口，命令行参数可覆盖 |
-| `GATEBRIDGE_API_TOKEN` | 空 | MCP HTTP 的静态 Bearer 令牌；监听非本机地址时必填 |
-| `GATEBRIDGE_ALLOWED_HOSTS` | 额外列表为空 | 逗号分隔的 HTTP Host，例如 `mcp.example.com` 或 `mcp.example.com:*`；自动允许本机地址 |
-| `GATEBRIDGE_ALLOWED_ORIGINS` | 额外列表为空 | 逗号分隔的浏览器 Origin，例如 `https://robot.example.com`；自动允许本机 HTTP Origin |
-
-`.env.example` 仅作为配置参考。普通 Python 启动不会自动加载 `.env`，可使用 `uv run --env-file .env`。令牌只从环境读取，不会出现在 Resources 或日志中。
-
-## 原服务端兼容条件
-
-适配器要求原服务端支持 `/ws` 上的 `controller` 角色。认证成功后，原服务端需依次发送 `auth_ack` 和设备状态快照。控制消息为 `{"device_id":"mg946r-001","cmd":"angle","value":180}`。
-
-原服务端在转发成功后需返回 `{"type":"status","device_id":"mg946r-001","online":true,"success":true,"cmd":"angle","queued":true}`。完整说明见 [接口文档](docs/api.md)。这是已检查项目中的独立舵机协议，不是小智语音 WebSocket 或通用设备 MCP 协议。
-
-如果原服务端在 Docker 容器中，需确认适配器所在网络可以访问舵机端口。容器内的 `127.0.0.1` 指向容器本身。原项目的示例 Compose 没有映射 `8777`。
-
-## 验证记录
-
-开发期间完成以下检查，未新增测试代码：
-
-- Ruff 静态检查和格式检查、Python 字节码编译、wheel 与源码包构建。
-- 使用 MCP Inspector 检查 stdio 工具发现、资源发现和提示模板读取。
-- 通过 Streamable HTTP 完成初始化，读取状态，检查缺少令牌返回 401、非法 Host 返回 421。
-- 在回环地址运行原项目的舵机服务，用临时 WebSocket 客户端代替板子，核对开门下发 180、关门下发 0，以及离线时返回工具错误。
-- 设备断开后重新连接适配器，确认原服务端残留的在线缓存被标记为未知和过期。
-
-没有连接生产地址或真实 ESP32。机械到位、防夹、生产网络和实际固件兼容性需要现场确认。
-
-## 容器与自动发布
-
-提供 [Dockerfile](Dockerfile)、[Compose 示例](compose.yaml) 和 [GitHub Actions 工作流](.github/workflows/publish-image.yml)。推送 `X.Y.Z` 或 `vX.Y.Z` 格式的 tag 后，自动构建两个 Linux 平台的镜像，并上传到 Secrets 指定的 Docker Hub、GHCR 或兼容仓库。工作流只构建和上传，部署由外部工具完成。
-
-发布方式参照 Myvideos-TS-Backend，镜像名固定为 `gatebridge-mcp`，同时发布版本标签和 `latest`。配置 `REGISTRY_HOST`、`REGISTRY_NAMESPACE`、`REGISTRY_USERNAME` 和 `REGISTRY_PASSWORD` 四个 Repository Secrets。
-
-原来的 `REGISTRY_IMAGE` 改为 `REGISTRY_NAMESPACE`，只填写目标平台的用户名或组织名。详细步骤、工作流链接和镜像运行方法见 [构建发布说明](docs/publishing.md)。
-
-工作流通过 JSON Schema 检查，Compose 通过配置检查。此前 CI 已完成两个平台的镜像构建，但推送因仓库写入权限不足失败；本次尚未验证实际上传。
+`main.py` 需要在 AstrBot 的插件加载环境中运行，不能作为独立脚本启动。依赖锁文件仅用于本地开发；AstrBot 使用 `requirements.txt` 安装插件依赖。
 
 ## 参考资料
 
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x)：Tools、Resources、Prompts、结构化结果和生命周期。
-- [MCP 传输规范](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)：stdio 与 Streamable HTTP。
-- 原项目的 `core/servo_control.py`、`ui/app.js` 和 `ui/index.html`：controller 认证、回执和角度映射。
+- [AstrBot 插件开发指南](https://docs.astrbot.app/dev/star/plugin-new.html)：插件目录、元数据、生命周期和依赖。
+- [AstrBot 插件配置](https://docs.astrbot.app/dev/star/guides/plugin-config.html)：配置页、列表和敏感字段遮罩。
+- [AstrBot 消息事件](https://docs.astrbot.app/dev/star/guides/listen-message-event.html)：指令、别名和事件处理。
+- [AstrBot 事件源码](https://github.com/AstrBotDevs/AstrBot/blob/master/astrbot/core/platform/astr_message_event.py)：平台实例、发送者和管理员身份。
+- 原项目 `core/servo_control.py` 和 `ui/index.html`：controller 认证、转发回执及 0°、180° 映射。

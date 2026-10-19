@@ -36,6 +36,12 @@
       }
     }
   },
+  "natural_language": {
+    "type": "bool",
+    "description": "启用自然语言闸门控制",
+    "default": true,
+    "hint": "需要模型支持工具调用，且当前人格允许本插件的三个工具。自然语言与指令使用相同的管理员和成员名单。每条消息最多尝试一次开关动作，失败后不会自动重试。关闭后仍可使用 /闸门 指令。"
+  },
   "permissions": {
     "type": "object",
     "description": "指令权限",

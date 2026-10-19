@@ -102,6 +102,18 @@ python -m compileall -q main.py gatebridge
 
 `main.py` 需要在 AstrBot 的插件加载环境中运行，不能作为独立脚本启动。依赖锁文件仅用于本地开发；AstrBot 使用 `requirements.txt` 安装插件依赖。
 
+## 打包与发布
+
+运行 `python scripts/package_plugin.py` 生成 `dist/astrbot_plugin_gatebridge.zip`，可在 AstrBot 插件菜单中本地上传。推送版本 tag 后，工作流会将 ZIP 上传到 GitHub Release，无需镜像仓库 Secrets。详见 [发布说明](docs/publishing.md)。
+
+## 验证范围
+
+已使用本机 AstrBot 4.25.5 的原生 API 检查插件加载、菜单 Schema 默认值、管理员继承、成员授权、跨平台同 ID 拒绝、自然语言工具过滤、直接调用复核和单消息重复控制限制。
+
+在回环地址运行原项目舵机后端，用临时设备客户端确认授权工具发送 180°、0°，未授权调用没有额外控制消息，插件停止后连接关闭。通过 Ruff、编译和发布工作流 Schema 检查；未新增测试文件。
+
+未连接真实聊天平台、真实模型或生产闸门，未完成 WebUI 视觉检查和云端 Release 发布。自然语言的实际识别效果需要在你的模型和人格设置中联调。
+
 ## 参考资料
 
 - [AstrBot 插件开发指南](https://docs.astrbot.app/dev/star/plugin-new.html)：插件目录、元数据、生命周期和依赖。
